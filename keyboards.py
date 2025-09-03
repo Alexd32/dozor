@@ -1,5 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
+# Кнопки игрока
 player_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Получить задание")],
@@ -9,10 +10,12 @@ player_kb = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
+# Кнопки админа
 admin_kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="Тестовая кнопка")],
-        [KeyboardButton(text="Проверить БД")]
+        [KeyboardButton(text="Начать игру")],
+        [KeyboardButton(text="Закончить игру")],
+        [KeyboardButton(text="Показать статистику")]
     ],
     resize_keyboard=True
 )

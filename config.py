@@ -1,5 +1,5 @@
 TELEGRAM_TOKEN = "8263124097:AAHHzmhZkcKd_kX8h4hNiUkmbkG95C20sjI"
-ADMINS = ["1simsim_pro", "myoldtgid"]  # список username админов без @
+ADMINS = ["simsim_pro", "myoldtgid"]  # список username админов без @
 
 DB_CONFIG = {
     "host": "127.0.0.1",
