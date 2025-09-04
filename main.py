@@ -3,8 +3,9 @@ import logging
 from aiogram import Bot, Dispatcher
 import config
 
-# Импортируем роутеры из модулей
-from handlers import start, admin, player
+# Импортируем роутеры
+from handlers import start, admin
+from handlers.player import init
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,7 +17,7 @@ async def main():
     # Подключаем роутеры
     dp.include_router(start.router)
     dp.include_router(admin.router)
-    dp.include_router(player.router)
+    dp.include_router(init.router)
 
     logging.info("✅ Бот запущен и ждёт события...")
     await dp.start_polling(bot)
