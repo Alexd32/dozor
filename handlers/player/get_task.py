@@ -4,6 +4,7 @@ from aiogram import Router
 from aiogram.types import Message
 from db import get_connection, get_game_status
 from keyboards import player_kb
+from limits import *
 
 router = Router()
 
@@ -64,11 +65,11 @@ async def get_task(message: Message):
         if active:
             started_at = active["started_at"]
             elapsed = now - started_at
-            minutes = int(elapsed.total_seconds() // 60)
+            minutes = int(elapsed.total_seconds() // TASK_TIME_LIMIT)
 
-            if minutes < 60:
+            if minutes < TASK_TIME_LIMIT:
                 await message.answer(
-                    f"⏳ Новое задание будет доступно через {60 - minutes} мин.\n"
+                    f"⏳ Новое задание будет доступно через {TASK_TIME_LIMIT - minutes} мин.\n"
                     f"📜 Текущее задание №{active['seq_num']}:\n"
                     f"🏷 {active['name']}\n"
                     f"📖 {active['text']}",

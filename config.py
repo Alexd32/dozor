@@ -7,3 +7,5 @@ DB_CONFIG = {
     "password": "79q9xIiG7bX6R[w2",          # если пароля нет — оставь пустым
     "database": "dozor"      # создаём заранее через phpMyAdmin
 }
+
+

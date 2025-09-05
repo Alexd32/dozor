@@ -3,6 +3,7 @@ from datetime import datetime
 from aiogram import Router
 from aiogram.types import Message
 from db import get_connection, get_game_status
+from limits import *
 
 router = Router()
 
@@ -59,19 +60,19 @@ async def get_hint(message: Message):
         started_at = row["started_at"]
         now = datetime.now()
         elapsed = now - started_at
-        minutes = int(elapsed.total_seconds() // 60)
+        minutes = int(elapsed.total_seconds() // TASK_TIME_LIMIT)
 
         if row["status"] == "waiting_answer":
-            if minutes < 20:
-                await message.answer(f"⏳ Первая подсказка будет доступна через {20 - minutes} мин.")
+            if minutes < HINT1_DELAY:
+                await message.answer(f"⏳ Первая подсказка будет доступна через {HINT1_DELAY - minutes} мин.")
             else:
                 cur.execute("UPDATE player_tasks SET status='hint1_sent' WHERE id=%s", (row["player_task_id"],))
                 conn.commit()
                 await message.answer(f"💡 Подсказка 1:\n{row['hint1']}")
 
         elif row["status"] == "hint1_sent":
-            if minutes < 40:
-                await message.answer(f"⏳ Вторая подсказка будет доступна через {40 - minutes} мин.")
+            if minutes < HINT2_DELAY:
+                await message.answer(f"⏳ Вторая подсказка будет доступна через {HINT2_DELAY - minutes} мин.")
             else:
                 cur.execute("UPDATE player_tasks SET status='hint2_sent' WHERE id=%s", (row["player_task_id"],))
                 conn.commit()

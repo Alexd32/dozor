@@ -3,6 +3,7 @@ import re
 from aiogram import Router
 from aiogram.types import Message
 from db import get_connection, get_game_status
+from limits import *
 
 router = Router()
 
