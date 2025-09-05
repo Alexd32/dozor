@@ -38,9 +38,9 @@ async def get_task(message: Message):
             SELECT p.id, gp.team
             FROM players p
             JOIN game_players gp ON p.id = gp.player_id
-            WHERE p.username = %s
+            WHERE p.username = %s AND gp.game_id = %s
             LIMIT 1
-        """, (username,))
+        """, (username, game["id"]))
         player = cur.fetchone()
         if not player:
             await message.answer("❌ Ты не зарегистрирован в игре.")
@@ -54,7 +54,7 @@ async def get_task(message: Message):
             FROM player_tasks pt
             JOIN tasks t ON pt.task_id = t.id
             WHERE pt.player_id = %s AND pt.game_id = %s
-              AND pt.status IN ('waiting_answer','hint1_sent','hint2_sent')
+              AND pt.status IN ('waiting_answer','hint1','hint2')
             ORDER BY pt.seq_num ASC
             LIMIT 1
         """, (player["id"], game["id"]))
@@ -64,12 +64,21 @@ async def get_task(message: Message):
 
         if active:
             started_at = active["started_at"]
-            elapsed = now - started_at
-            minutes = int(elapsed.total_seconds() // TASK_TIME_LIMIT)
+            elapsed_minutes = int((now - started_at).total_seconds() // 60)
 
-            if minutes < TASK_TIME_LIMIT:
+            if elapsed_minutes < TASK_TIME_LIMIT:
+                # Обновляем last_action_at для игрока
+                cur.execute("""
+                    UPDATE game_players
+                    SET current_task = %s,
+                        status = %s,
+                        last_action_at = NOW()
+                    WHERE game_id = %s AND player_id = %s
+                """, (active["seq_num"], active["status"], game["id"], player["id"]))
+                conn.commit()
+
                 await message.answer(
-                    f"⏳ Новое задание будет доступно через {TASK_TIME_LIMIT - minutes} мин.\n"
+                    f"⏳ Новое задание будет доступно через {TASK_TIME_LIMIT - elapsed_minutes} мин.\n"
                     f"📜 Текущее задание №{active['seq_num']}:\n"
                     f"🏷 {active['name']}\n"
                     f"📖 {active['text']}",
@@ -85,6 +94,14 @@ async def get_task(message: Message):
                     SET status='timeout', finished_at=NOW()
                     WHERE id=%s
                 """, (active["player_task_id"],))
+
+                cur.execute("""
+                    UPDATE game_players
+                    SET status='timeout',
+                        finished_at=NOW(),
+                        last_action_at=NOW()
+                    WHERE game_id = %s AND player_id = %s
+                """, (game["id"], player["id"]))
                 conn.commit()
 
         # Ищем следующее задание
@@ -110,6 +127,18 @@ async def get_task(message: Message):
             SET status='waiting_answer', started_at=NOW()
             WHERE id=%s
         """, (row["player_task_id"],))
+
+        cur.execute("""
+            UPDATE game_players
+            SET current_task = %s,
+                status = 'waiting_answer',
+                started_at = NOW(),
+                hint1_at = NULL,
+                hint2_at = NULL,
+                finished_at = NULL,
+                last_action_at = NOW()
+            WHERE game_id = %s AND player_id = %s
+        """, (row["seq_num"], game["id"], player["id"]))
         conn.commit()
         conn.close()
 

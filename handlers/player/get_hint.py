@@ -42,11 +42,12 @@ async def get_hint(message: Message):
 
         # Ищем активное задание
         cur.execute("""
-            SELECT pt.id as player_task_id, pt.status, pt.started_at, t.hint1, t.hint2
+            SELECT pt.id as player_task_id, pt.status, pt.started_at, pt.seq_num,
+                   t.hint1, t.hint2
             FROM player_tasks pt
             JOIN tasks t ON pt.task_id = t.id
             WHERE pt.player_id = %s AND pt.game_id = %s
-              AND pt.status IN ('waiting_answer','hint1_sent','hint2_sent')
+              AND pt.status IN ('waiting_answer','hint1','hint2')
             ORDER BY pt.seq_num ASC
             LIMIT 1
         """, (player["id"], game["id"]))
@@ -59,26 +60,44 @@ async def get_hint(message: Message):
 
         started_at = row["started_at"]
         now = datetime.now()
-        elapsed = now - started_at
-        minutes = int(elapsed.total_seconds() // TASK_TIME_LIMIT)
+        elapsed_minutes = int((now - started_at).total_seconds() // 60)
 
+        # 1-я подсказка
         if row["status"] == "waiting_answer":
-            if minutes < HINT1_DELAY:
-                await message.answer(f"⏳ Первая подсказка будет доступна через {HINT1_DELAY - minutes} мин.")
+            if elapsed_minutes < HINT1_DELAY:
+                await message.answer(f"⏳ Первая подсказка будет доступна через {HINT1_DELAY - elapsed_minutes} мин.")
             else:
-                cur.execute("UPDATE player_tasks SET status='hint1_sent' WHERE id=%s", (row["player_task_id"],))
+                cur.execute("UPDATE player_tasks SET status='hint1' WHERE id=%s", (row["player_task_id"],))
+                cur.execute("""
+                    UPDATE game_players
+                    SET status='hint1',
+                        hint1_at=NOW(),
+                        last_action_at=NOW(),
+                        current_task=%s
+                    WHERE game_id=%s AND player_id=%s
+                """, (row["seq_num"], game["id"], player["id"]))
                 conn.commit()
                 await message.answer(f"💡 Подсказка 1:\n{row['hint1']}")
 
-        elif row["status"] == "hint1_sent":
-            if minutes < HINT2_DELAY:
-                await message.answer(f"⏳ Вторая подсказка будет доступна через {HINT2_DELAY - minutes} мин.")
+        # 2-я подсказка
+        elif row["status"] == "hint1":
+            if elapsed_minutes < HINT2_DELAY:
+                await message.answer(f"⏳ Вторая подсказка будет доступна через {HINT2_DELAY - elapsed_minutes} мин.")
             else:
-                cur.execute("UPDATE player_tasks SET status='hint2_sent' WHERE id=%s", (row["player_task_id"],))
+                cur.execute("UPDATE player_tasks SET status='hint2' WHERE id=%s", (row["player_task_id"],))
+                cur.execute("""
+                    UPDATE game_players
+                    SET status='hint2',
+                        hint2_at=NOW(),
+                        last_action_at=NOW(),
+                        current_task=%s
+                    WHERE game_id=%s AND player_id=%s
+                """, (row["seq_num"], game["id"], player["id"]))
                 conn.commit()
                 await message.answer(f"💡 Подсказка 2:\n{row['hint2']}")
 
-        elif row["status"] == "hint2_sent":
+        # Больше подсказок нет
+        elif row["status"] == "hint2":
             await message.answer("❌ Больше подсказок нет.")
 
         conn.close()

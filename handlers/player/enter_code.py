@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime
 from aiogram import Router
 from aiogram.types import Message
 from db import get_connection, get_game_status
@@ -45,7 +46,7 @@ async def ask_code(message: Message):
             FROM player_tasks pt
             JOIN players p ON p.id = pt.player_id
             WHERE p.username = %s AND pt.game_id = %s
-              AND pt.status IN ('waiting_answer','hint1_sent','hint2_sent')
+              AND pt.status IN ('waiting_answer','hint1','hint2')
             ORDER BY pt.seq_num ASC
             LIMIT 1
         """, (username, game["id"]))
@@ -77,6 +78,10 @@ async def ask_code(message: Message):
 
 @router.message(lambda m: not m.text.startswith("/") and len(m.text) <= 50)
 async def enter_code(message: Message):
+    # Фильтр: не реагируем на служебные кнопки
+    if message.text in ("Получить задание", "Получить подсказку", "Ввести код"):
+        return
+
     game = get_game_status()
     if not game or game["status"] != "in_progress":
         return
@@ -92,12 +97,13 @@ async def enter_code(message: Message):
 
         # Ищем активное задание
         cur.execute("""
-            SELECT pt.id as player_task_id, pt.seq_num, t.answer_code
+            SELECT pt.id as player_task_id, pt.seq_num, pt.started_at,
+                   t.answer_code, p.id as player_id
             FROM player_tasks pt
             JOIN tasks t ON pt.task_id = t.id
             JOIN players p ON p.id = pt.player_id
             WHERE p.username = %s AND pt.game_id = %s
-              AND pt.status IN ('waiting_answer','hint1_sent','hint2_sent')
+              AND pt.status IN ('waiting_answer','hint1','hint2')
             ORDER BY pt.seq_num ASC
             LIMIT 1
         """, (username, game["id"]))
@@ -117,13 +123,29 @@ async def enter_code(message: Message):
             return
 
         if user_code == correct_code:
+            # Считаем время выполнения
+            elapsed_minutes = int((datetime.now() - row["started_at"]).total_seconds() // 60)
+
+            # Обновляем player_tasks
             cur.execute("""
                 UPDATE player_tasks
                 SET status='success', finished_at=NOW()
                 WHERE id=%s
             """, (row["player_task_id"],))
+
+            # Обновляем game_players
+            cur.execute("""
+                UPDATE game_players
+                SET status='success',
+                    finished_at=NOW(),
+                    total_time = total_time + %s,
+                    last_action_at=NOW(),
+                    current_task=%s
+                WHERE game_id=%s AND player_id=%s
+            """, (elapsed_minutes, row["seq_num"], game["id"], row["player_id"]))
             conn.commit()
             conn.close()
+
             await message.answer(f"✅ Код принят! Задание #{row['seq_num']} выполнено.")
         else:
             await message.answer("❌ Неверный код. Попробуй ещё раз.")
