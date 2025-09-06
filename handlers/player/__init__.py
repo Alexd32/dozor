@@ -5,3 +5,5 @@ router = Router()
 router.include_router(get_task.router)
 router.include_router(get_hint.router)
 router.include_router(enter_code.router)
+
+__all__ = ["router"]
