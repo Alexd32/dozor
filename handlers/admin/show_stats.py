@@ -6,6 +6,34 @@ from db import get_connection
 
 router = Router(name="admin_show_stats")
 
+# --- вспомогательное: отправка длинного текста частями ---
+MAX_LEN = 3900  # чуть меньше 4096 для запаса
+
+async def _send_chunked(message: Message, text: str, parse_mode: str = "HTML"):
+    """
+    Безопасно отправляет длинный текст несколькими сообщениями.
+    Режет по строкам, чтобы не рвать HTML-теги.
+    """
+    if len(text) <= MAX_LEN:
+        await message.answer(text, parse_mode=parse_mode)
+        return
+
+    lines = text.split("\n")
+    buf = []
+    size = 0
+    for line in lines:
+        add = len(line) + 1  # + '\n'
+        if size + add > MAX_LEN and buf:
+            await message.answer("\n".join(buf), parse_mode=parse_mode)
+            buf = [line]
+            size = len(line) + 1
+        else:
+            buf.append(line)
+            size += add
+    if buf:
+        await message.answer("\n".join(buf), parse_mode=parse_mode)
+
+
 @router.message(F.text == "Показать статистику")
 async def show_stats(message: Message):
     """
@@ -49,7 +77,7 @@ async def show_stats(message: Message):
                 dt = now - started_at
             game_elapsed_str = format_td(dt)
 
-        # Заранее узнаём, сколько всего заданий в игре (нужно, чтобы понять, кто реально закончил все)
+        # Сколько всего заданий в игре
         cur.execute("SELECT COUNT(*) AS cnt FROM tasks WHERE game_id = %s", (game["id"],))
         tasks_total = (cur.fetchone() or {}).get("cnt", 0)
 
@@ -85,7 +113,6 @@ async def show_stats(message: Message):
                     "last_success_finish": None,
                     "success_count": 0
                 }
-            # Копим карточки задач
             if r["seq_num"] is not None:
                 status_view = {
                     "waiting_answer": "⏳ В процессе",
@@ -110,13 +137,12 @@ async def show_stats(message: Message):
                     if (teams[key]["last_success_finish"] is None) or (r["task_finish"] > teams[key]["last_success_finish"]):
                         teams[key]["last_success_finish"] = r["task_finish"]
 
-        # Считаем итог по командам
+        # Итоги по командам
         results = []
         for (team, username), data in teams.items():
-            # Определяем, прошла ли команда ВСЕ задания
             finished_all = (tasks_total > 0 and data["success_count"] >= tasks_total)
 
-            # Стоп-время для расчёта общего времени
+            # Стоп-время для общего времени
             stop_time = None
             if finished_all and data["last_success_finish"]:
                 stop_time = data["last_success_finish"]
@@ -125,7 +151,6 @@ async def show_stats(message: Message):
             elif game["status"] == "in_progress":
                 stop_time = now
 
-            # Общее время
             elapsed_seconds = None
             elapsed_str = "—"
             if started_at and stop_time:
@@ -146,34 +171,39 @@ async def show_stats(message: Message):
                 "tasks": data["tasks"]
             })
 
-        # Формируем текст
-        text = [
+        # --- отправка: разбиваем на блоки, чтобы не упереться в лимит Telegram ---
+
+        # Шапка
+        header = [
             "📊 <b>Статистика по игре</b>",
             f"Статус игры: <b>{status_map.get(game['status'], game['status'])}</b>",
             f"⏱ Время игры: <b>{game_elapsed_str}</b>",
-            ""
         ]
+        await _send_chunked(message, "\n".join(header), parse_mode="HTML")
 
+        # Каждая команда отдельным сообщением
         for r in results:
-            text.append(f"👥 <b>Команда:</b> {r['team']} (<i>@{r['username']}</i>)")
-            text.append(f"⏱ Общее время: <b>{r['elapsed_str']}</b>")
-            text.append(f"🕒 Чистое время заданий: <b>{r['pure_str']}</b>")
-            text.extend(r["tasks"] or ["  • Заданий пока нет"])
-            text.append("")  # пустая строка-разделитель
+            block = []
+            block.append(f"👥 <b>Команда:</b> {r['team']} (<i>@{r['username']}</i>)")
+            block.append(f"⏱ Общее время: <b>{r['elapsed_str']}</b>")
+            block.append(f"🕒 Чистое время заданий: <b>{r['pure_str']}</b>")
+            block.extend(r["tasks"] or ["  • Заданий пока нет"])
+            await _send_chunked(message, "\n".join(block), parse_mode="HTML")
 
         # Рейтинг после завершения игры
         if game["status"] == "finished":
             sortable = [r for r in results if r["elapsed_seconds"] is not None]
             sortable.sort(key=lambda x: x["elapsed_seconds"])
-            text.append("🏆 <b>Рейтинг команд (по общему времени игры):</b>")
+
+            rating_lines = ["🏆 <b>Рейтинг команд (по общему времени игры):</b>"]
             if not sortable:
-                text.append("—")
+                rating_lines.append("—")
             else:
                 for i, r in enumerate(sortable, 1):
                     line = f"{i} место — {r['team']} (@{r['username']}) — {r['elapsed_str']}"
-                    text.append(f"<b>{line}</b>" if i == 1 else line)
+                    rating_lines.append(f"<b>{line}</b>" if i == 1 else line)
 
-        await message.answer("\n".join(text), parse_mode="HTML")
+            await _send_chunked(message, "\n".join(rating_lines), parse_mode="HTML")
 
     except Exception as e:
         logging.exception("Ошибка при показе статистики")
