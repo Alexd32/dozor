@@ -125,12 +125,29 @@ async def show_stats(message: Message):
                     None: "—"
                 }.get(r["status"], "—")
 
+                # teams[key]["tasks"].append(
+                #     f"  • Задание {r['seq_num']}: {r.get('task_name') or '—'} — {status_view}"
+                # )
+                
+                # рассчитываем время выполнения для success/timeout
+                task_time_str = ""
+                if r["status"] in ("success", "timeout") and r["task_start"] and r["task_finish"]:
+                    try:
+                        sec = int((r["task_finish"] - r["task_start"]).total_seconds())
+                        task_time_str = f" ({sec // 60} мин {sec % 60} сек)"
+             #          task_time_str = f" ({sec // 60} мин)"
+                    except Exception:
+                        task_time_str = ""
+
+                # компактный вывод: номер + название, без слова "Задание"
                 teams[key]["tasks"].append(
-                    f"  • Задание {r['seq_num']}: {r.get('task_name') or '—'} — {status_view}"
+                    f"  • {r['seq_num']}: {r.get('task_name') or '—'} — {status_view}{task_time_str}"
                 )
 
+
                 # Чистое время только по success
-                if r["status"] == "success" and r["task_start"] and r["task_finish"]:
+                #if r["status"] == "success" and r["task_start"] and r["task_finish"]:
+                if r["status"] in ("success", "timeout") and r["task_start"] and r["task_finish"]:
                     sec = int((r["task_finish"] - r["task_start"]).total_seconds())
                     teams[key]["pure_seconds"] += max(sec, 0)
                     teams[key]["success_count"] += 1
