@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from aiogram import Router
 from aiogram.types import Message
 from db import get_connection, get_game_status
@@ -123,25 +123,60 @@ async def enter_code(message: Message):
             return
 
         if user_code == correct_code:
-            # Считаем время выполнения
-            elapsed_minutes = int((datetime.now() - row["started_at"]).total_seconds() // 60)
+            now_ts = datetime.now()
 
-            # Обновляем player_tasks
+            # если по какой-то причине нет started_at, чтобы не падать — считаем 0 минут
+            started_at = row["started_at"] or now_ts
+
+            elapsed_sec = int((now_ts - started_at).total_seconds())
+            elapsed_minutes = elapsed_sec // 60
+
+            # проверяем лимит времени на задание
+            if elapsed_sec > TASK_TIME_LIMIT * 60:
+                # просрочено: фиксируем окончание на границе лимита, чтобы в статистике было ровно TASK_TIME_LIMIT минут
+                capped_finish = started_at + timedelta(minutes=TASK_TIME_LIMIT)
+
+                # Обновляем player_tasks -> timeout
+                cur.execute("""
+                    UPDATE player_tasks
+                       SET status='timeout', finished_at=%s
+                     WHERE id=%s
+                """, (capped_finish, row["player_task_id"]))
+
+                # Обновляем game_players -> timeout, total_time + лимит минут
+                cur.execute("""
+                    UPDATE game_players
+                       SET status='timeout',
+                           finished_at=%s,
+                           total_time = total_time + %s,
+                           last_action_at=NOW(),
+                           current_task=%s
+                     WHERE game_id=%s AND player_id=%s
+                """, (capped_finish, TASK_TIME_LIMIT, row["seq_num"], game["id"], row["player_id"]))
+                conn.commit()
+                conn.close()
+
+                await message.answer(
+                    f"⏰ Время на выполнение задания #{row['seq_num']} истекло "
+                    f"(лимит {TASK_TIME_LIMIT} мин). Код после истечения времени не принимается."
+                )
+                return
+
+            # успели в лимит → success
             cur.execute("""
                 UPDATE player_tasks
-                SET status='success', finished_at=NOW()
-                WHERE id=%s
+                   SET status='success', finished_at=NOW()
+                 WHERE id=%s
             """, (row["player_task_id"],))
 
-            # Обновляем game_players
             cur.execute("""
                 UPDATE game_players
-                SET status='success',
-                    finished_at=NOW(),
-                    total_time = total_time + %s,
-                    last_action_at=NOW(),
-                    current_task=%s
-                WHERE game_id=%s AND player_id=%s
+                   SET status='success',
+                       finished_at=NOW(),
+                       total_time = total_time + %s,
+                       last_action_at=NOW(),
+                       current_task=%s
+                 WHERE game_id=%s AND player_id=%s
             """, (elapsed_minutes, row["seq_num"], game["id"], row["player_id"]))
             conn.commit()
             conn.close()
