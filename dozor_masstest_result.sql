@@ -1,0 +1,331 @@
+-- phpMyAdmin SQL Dump
+-- version 5.2.1
+-- https://www.phpmyadmin.net/
+--
+-- Host: 127.0.0.1
+-- Generation Time: Sep 17, 2025 at 06:38 AM
+-- Server version: 10.4.32-MariaDB
+-- PHP Version: 8.0.30
+
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
+
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+
+--
+-- Database: `dozor`
+--
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `games`
+--
+
+CREATE TABLE `games` (
+  `id` int(11) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `status` enum('not_started','in_progress','finished') NOT NULL DEFAULT 'not_started',
+  `started_at` timestamp NULL DEFAULT NULL,
+  `finished_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `games`
+--
+
+INSERT INTO `games` (`id`, `name`, `status`, `started_at`, `finished_at`) VALUES
+(2, 'Тестовая игра', 'finished', '2025-09-16 11:00:22', '2025-09-16 13:55:24');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `game_players`
+--
+
+CREATE TABLE `game_players` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `player_id` int(11) NOT NULL,
+  `team` varchar(255) DEFAULT NULL,
+  `current_task` int(11) DEFAULT 1,
+  `status` enum('idle','waiting_answer','hint1','hint2','success','timeout','finished') DEFAULT 'idle',
+  `started_at` timestamp NULL DEFAULT NULL,
+  `hint1_at` timestamp NULL DEFAULT NULL,
+  `hint2_at` timestamp NULL DEFAULT NULL,
+  `finished_at` timestamp NULL DEFAULT NULL,
+  `last_action_at` timestamp NULL DEFAULT NULL,
+  `time_spent` int(11) DEFAULT 0,
+  `total_time` int(11) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `game_players`
+--
+
+INSERT INTO `game_players` (`id`, `game_id`, `player_id`, `team`, `current_task`, `status`, `started_at`, `hint1_at`, `hint2_at`, `finished_at`, `last_action_at`, `time_spent`, `total_time`) VALUES
+(19, 2, 1, 'Team Makish25', 7, 'success', '2025-09-16 12:53:05', NULL, NULL, '2025-09-16 12:54:15', '2025-09-16 12:54:15', 0, 66),
+(20, 2, 2, 'Team helga_kazan', 7, 'success', '2025-09-16 12:55:45', NULL, NULL, '2025-09-16 12:56:17', '2025-09-16 12:56:17', 0, 95),
+(21, 2, 3, 'Team art_lobanov', 4, 'hint1', '2025-09-16 12:16:55', '2025-09-16 13:04:24', NULL, NULL, '2025-09-16 13:04:24', 0, 2),
+(22, 2, 4, 'Team Eastwilds', 3, 'waiting_answer', '2025-09-16 13:45:27', NULL, NULL, NULL, '2025-09-16 13:45:27', 0, 87),
+(23, 2, 5, 'Team Ilyakrut9', 3, 'hint2', '2025-09-16 12:31:32', '2025-09-16 12:57:30', '2025-09-16 13:20:38', NULL, '2025-09-16 13:20:44', 0, 22);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `game_stats`
+--
+
+CREATE TABLE `game_stats` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `player_id` int(11) NOT NULL,
+  `task_num` int(11) NOT NULL,
+  `status` enum('success','timeout') NOT NULL,
+  `started_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `finished_at` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `time_spent` int(11) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `players`
+--
+
+CREATE TABLE `players` (
+  `id` int(11) NOT NULL,
+  `telegram_id` bigint(20) NOT NULL,
+  `username` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `players`
+--
+
+INSERT INTO `players` (`id`, `telegram_id`, `username`, `created_at`) VALUES
+(1, 10001, 'Makish25', '2025-09-03 04:40:57'),
+(2, 10002, 'helga_kazan', '2025-09-03 04:40:57'),
+(3, 10003, 'art_lobanov', '2025-09-03 04:40:57'),
+(4, 10004, 'Eastwilds', '2025-09-03 04:40:57'),
+(5, 10005, 'Ilyakrut9', '2025-09-03 04:40:57');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `player_tasks`
+--
+
+CREATE TABLE `player_tasks` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `player_id` int(11) NOT NULL,
+  `task_id` int(11) NOT NULL,
+  `seq_num` int(11) NOT NULL,
+  `status` enum('not_started','waiting_answer','hint1','hint2','success','timeout') DEFAULT 'not_started',
+  `started_at` timestamp NULL DEFAULT NULL,
+  `finished_at` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `player_tasks`
+--
+
+INSERT INTO `player_tasks` (`id`, `game_id`, `player_id`, `task_id`, `seq_num`, `status`, `started_at`, `finished_at`) VALUES
+(289, 2, 1, 25, 1, 'success', '2025-09-16 11:24:38', '2025-09-16 11:29:12'),
+(290, 2, 1, 26, 2, 'timeout', '2025-09-16 11:29:58', '2025-09-16 12:29:58'),
+(291, 2, 1, 27, 3, 'success', '2025-09-16 12:48:00', '2025-09-16 12:49:56'),
+(292, 2, 1, 28, 4, 'success', '2025-09-16 12:52:34', '2025-09-16 12:52:42'),
+(293, 2, 1, 29, 5, 'success', '2025-09-16 12:52:46', '2025-09-16 12:52:53'),
+(294, 2, 1, 30, 6, 'success', '2025-09-16 12:52:56', '2025-09-16 12:53:02'),
+(295, 2, 1, 31, 7, 'success', '2025-09-16 12:53:05', '2025-09-16 12:54:15'),
+(296, 2, 2, 29, 1, 'success', '2025-09-16 11:00:27', '2025-09-16 11:04:59'),
+(297, 2, 2, 25, 2, 'timeout', '2025-09-16 11:10:28', '2025-09-16 12:10:28'),
+(298, 2, 2, 26, 3, 'success', '2025-09-16 12:12:52', '2025-09-16 12:17:11'),
+(299, 2, 2, 30, 4, 'success', '2025-09-16 12:27:03', '2025-09-16 12:54:38'),
+(300, 2, 2, 27, 5, 'success', '2025-09-16 12:54:53', '2025-09-16 12:55:20'),
+(301, 2, 2, 28, 6, 'success', '2025-09-16 12:55:23', '2025-09-16 12:55:43'),
+(302, 2, 2, 31, 7, 'success', '2025-09-16 12:55:45', '2025-09-16 12:56:17'),
+(303, 2, 3, 29, 1, 'timeout', '2025-09-16 11:02:44', '2025-09-16 12:13:39'),
+(304, 2, 3, 26, 2, 'success', '2025-09-16 12:13:39', '2025-09-16 12:15:11'),
+(305, 2, 3, 25, 3, 'success', '2025-09-16 12:15:17', '2025-09-16 12:16:37'),
+(306, 2, 3, 28, 4, 'hint1', '2025-09-16 12:16:55', NULL),
+(307, 2, 3, 30, 5, 'not_started', NULL, NULL),
+(308, 2, 3, 27, 6, 'not_started', NULL, NULL),
+(309, 2, 3, 31, 7, 'not_started', NULL, NULL),
+(310, 2, 4, 29, 1, 'timeout', '2025-09-16 12:13:25', '2025-09-16 13:13:25'),
+(311, 2, 4, 28, 2, 'success', '2025-09-16 13:17:26', '2025-09-16 13:45:18'),
+(312, 2, 4, 26, 3, 'waiting_answer', '2025-09-16 13:45:27', NULL),
+(313, 2, 4, 25, 4, 'not_started', NULL, NULL),
+(314, 2, 4, 27, 5, 'not_started', NULL, NULL),
+(315, 2, 4, 30, 6, 'not_started', NULL, NULL),
+(316, 2, 4, 31, 7, 'not_started', NULL, NULL),
+(317, 2, 5, 28, 1, 'success', '2025-09-16 11:03:43', '2025-09-16 11:25:45'),
+(318, 2, 5, 27, 2, 'timeout', '2025-09-16 11:25:52', '2025-09-16 12:31:32'),
+(319, 2, 5, 26, 3, 'hint2', '2025-09-16 12:31:32', NULL),
+(320, 2, 5, 29, 4, 'not_started', NULL, NULL),
+(321, 2, 5, 25, 5, 'not_started', NULL, NULL),
+(322, 2, 5, 30, 6, 'not_started', NULL, NULL),
+(323, 2, 5, 31, 7, 'not_started', NULL, NULL);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `tasks`
+--
+
+CREATE TABLE `tasks` (
+  `id` int(11) NOT NULL,
+  `game_id` int(11) NOT NULL,
+  `seq_num` int(11) NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `text` text NOT NULL,
+  `hint1` text DEFAULT NULL,
+  `hint2` text DEFAULT NULL,
+  `answer_code` varchar(50) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `tasks`
+--
+
+INSERT INTO `tasks` (`id`, `game_id`, `seq_num`, `name`, `text`, `hint1`, `hint2`, `answer_code`) VALUES
+(25, 2, 1, 'Мост на Гвардейской', 'В жизни Шурика бывало разное: например, нужно найти контрагента с дебиторской задолженностью (1660218703). И вот он мчится по этому адресу, слушая песню RHCP:\r\n«Sometimes I feel\r\nLike I don\'t have a partner…»\r\nКод опасности 2, метки. На брифе вы получили конфету. Это бонус на всю игру. Дерзайте.', 'Судя по количеству колец, директор этой фирмы убегает от алиментов и прячется под каким-нибудь мостом, но Шурик его найдёт…', 'Это текст второй подсказки', '25DZR3061'),
+(26, 2, 2, 'КФЭИ', 'Альма-матер Шурика использовалась им всегда для подтягивания икроножных мышц. Фантазируя над картой, Шурик загадывал бы это место как точку схождения американских подпольных спиртных дел мастеров. Вдобавок шифровались они шифровались и меняли форматы. Код опасности 1. Пароль: период дат без тире', 'RAR распакуется иначе.', 'Это текст второй подсказки', '25DZR19361950'),
+(27, 2, 3, 'Лаванда', 'Используйте реквизит. Код опасности 1. Ожидают агенты.', 'Шурик любил разгадывать загадки:\r\nЯ современный «Бог войны», защитник рубежей страны, ведь прежде чем пойти на бой, меня пускают на «разбой».\r\nА я цветочек синий, в кофе добавляюсь. Лечебный, и приятный запах источаю.', 'Это текст второй подсказки', '25DZR3366'),
+(28, 2, 4, 'Дубравный лес', 'Шурик хотел вернуться в прошлое. Пересмотрев «Назад в будущее», он решил, что для начала ему нужно место, в которое чаще всего бьют молнии. Чаще всего скопление их притягивает молнии. Шурик знал это место ещё по игре «Незваный гость» от KiCaDa, состоявшейся 16 декабря 2006 года. Код опасности 1, метки.', '55.734744, 49.197000', 'Это текст второй подсказки', '25DZR9047'),
+(29, 2, 5, 'Озеро Кабан', 'Одним из новых приключений Шурика была съёмка в фильме 2013 года и дружба с Гошей К. «О. К. тогда, – сказал себе Шурик, – всё равно надо вставить туда любимую песню:\r\n«Постой, паровоз, не стучите колёса,\r\nКондуктор, нажми на тормоза,\r\nЯ к маменьке родной с последним приветом…»\r\nКод опасности 2, метки.', 'Кондуктор, бас тормозынга, тимер юлдан барасын бит.', 'Это текст второй подсказки', '25DZR212'),
+(30, 2, 6, 'Аракчино, 43 артиллерийская база', 'В армии Шурик не служил, хотя иногда и подумывал об этом. Финансисту-оценщику нашлось бы место на какой-нибудь основе, фундаменте. Но часть выбрал бы себе обязательно с красивым номером, как у родного региона. Код опасности 2, метки.', 'Такие мысли посещали его только до 13 сентября 2016 года.', 'Это текст второй подсказки', '25DZR908531'),
+(31, 2, 7, 'Пляж Локомотив', 'Хорошая девочка Лида… Шурик не был святым или протопопом, и ему точно она была нужна утром. Однако в это время было не просто отсутствие, а вавуум. Да ещё и сосед Хасаныч своими археологическими историями их отпугивал напрочь. Код опасности 1. Задание делать последним. Ожидают агенты.', 'Красно-зелёный горит небосвод. Наш паровоз – как самолёт! Снова победа от нас не уйдёт!', 'Это текст второй подсказки', '25DZR555');
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `games`
+--
+ALTER TABLE `games`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `game_players`
+--
+ALTER TABLE `game_players`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `player_id` (`player_id`),
+  ADD KEY `idx_game_players_game` (`game_id`);
+
+--
+-- Indexes for table `game_stats`
+--
+ALTER TABLE `game_stats`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `player_id` (`player_id`),
+  ADD KEY `idx_game_stats_game` (`game_id`);
+
+--
+-- Indexes for table `players`
+--
+ALTER TABLE `players`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `telegram_id` (`telegram_id`);
+
+--
+-- Indexes for table `player_tasks`
+--
+ALTER TABLE `player_tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `player_id` (`player_id`),
+  ADD KEY `task_id` (`task_id`),
+  ADD KEY `idx_player_tasks_game_player` (`game_id`,`player_id`);
+
+--
+-- Indexes for table `tasks`
+--
+ALTER TABLE `tasks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_tasks_game` (`game_id`);
+
+--
+-- AUTO_INCREMENT for dumped tables
+--
+
+--
+-- AUTO_INCREMENT for table `games`
+--
+ALTER TABLE `games`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT for table `game_players`
+--
+ALTER TABLE `game_players`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=34;
+
+--
+-- AUTO_INCREMENT for table `game_stats`
+--
+ALTER TABLE `game_stats`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `players`
+--
+ALTER TABLE `players`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT for table `player_tasks`
+--
+ALTER TABLE `player_tasks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=324;
+
+--
+-- AUTO_INCREMENT for table `tasks`
+--
+ALTER TABLE `tasks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `game_players`
+--
+ALTER TABLE `game_players`
+  ADD CONSTRAINT `game_players_ibfk_1` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `game_players_ibfk_2` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `game_stats`
+--
+ALTER TABLE `game_stats`
+  ADD CONSTRAINT `game_stats_ibfk_1` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `game_stats_ibfk_2` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `player_tasks`
+--
+ALTER TABLE `player_tasks`
+  ADD CONSTRAINT `player_tasks_ibfk_1` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `player_tasks_ibfk_2` FOREIGN KEY (`player_id`) REFERENCES `players` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `player_tasks_ibfk_3` FOREIGN KEY (`task_id`) REFERENCES `tasks` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `tasks`
+--
+ALTER TABLE `tasks`
+  ADD CONSTRAINT `tasks_ibfk_1` FOREIGN KEY (`game_id`) REFERENCES `games` (`id`) ON DELETE CASCADE;
+COMMIT;
+
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
