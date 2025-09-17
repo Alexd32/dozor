@@ -3,17 +3,13 @@ from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message
 from db import get_connection
+from limits import TASK_TIME_LIMIT, SHTRAF_TIME
 
 router = Router(name="admin_show_stats")
 
-# --- вспомогательное: отправка длинного текста частями ---
-MAX_LEN = 3900  # чуть меньше 4096 для запаса
+MAX_LEN = 3900
 
 async def _send_chunked(message: Message, text: str, parse_mode: str = "HTML"):
-    """
-    Безопасно отправляет длинный текст несколькими сообщениями.
-    Режет по строкам, чтобы не рвать HTML-теги.
-    """
     if len(text) <= MAX_LEN:
         await message.answer(text, parse_mode=parse_mode)
         return
@@ -22,7 +18,7 @@ async def _send_chunked(message: Message, text: str, parse_mode: str = "HTML"):
     buf = []
     size = 0
     for line in lines:
-        add = len(line) + 1  # + '\n'
+        add = len(line) + 1
         if size + add > MAX_LEN and buf:
             await message.answer("\n".join(buf), parse_mode=parse_mode)
             buf = [line]
@@ -36,23 +32,10 @@ async def _send_chunked(message: Message, text: str, parse_mode: str = "HTML"):
 
 @router.message(F.text == "Показать статистику")
 async def show_stats(message: Message):
-    """
-    Отчёт по игре:
-    - В шапке: статус игры + текущее общее время игры
-    - Для каждой команды:
-        ⏱ Общее время (от games.started_at до:
-            • ввода кода последнего задания, если команда прошла все задания;
-            • games.finished_at, если игра завершена админом;
-            • now(), если игра ещё идёт)
-        🕒 Чистое время (сумма success: finished_at - started_at)
-        + список заданий со статусами
-    - Если игра завершена — рейтинг по общему времени (по возрастанию)
-    """
     try:
         conn = get_connection()
         cur = conn.cursor(dictionary=True)
 
-        # Игра
         cur.execute("SELECT id, status, started_at, finished_at FROM games ORDER BY id DESC LIMIT 1")
         game = cur.fetchone()
         if not game:
@@ -68,7 +51,6 @@ async def show_stats(message: Message):
         finished_at = game["finished_at"]
         now = datetime.now()
 
-        # Текущее общее время игры
         game_elapsed_str = "—"
         if started_at:
             if game["status"] == "finished" and finished_at:
@@ -77,11 +59,9 @@ async def show_stats(message: Message):
                 dt = now - started_at
             game_elapsed_str = format_td(dt)
 
-        # Сколько всего заданий в игре
         cur.execute("SELECT COUNT(*) AS cnt FROM tasks WHERE game_id = %s", (game["id"],))
         tasks_total = (cur.fetchone() or {}).get("cnt", 0)
 
-        # Данные по игрокам/командам и заданиям
         cur.execute("""
             SELECT gp.team,
                    p.username,
@@ -102,8 +82,7 @@ async def show_stats(message: Message):
         """, (game["id"],))
         rows = cur.fetchall()
 
-        # Группируем по командам
-        teams = {}  # key: (team, username)
+        teams = {}
         for r in rows:
             key = (r["team"], r["username"])
             if key not in teams:
@@ -113,6 +92,7 @@ async def show_stats(message: Message):
                     "last_success_finish": None,
                     "success_count": 0
                 }
+
             if r["seq_num"] is not None:
                 status_view = {
                     "waiting_answer": "⏳ В процессе",
@@ -125,41 +105,33 @@ async def show_stats(message: Message):
                     None: "—"
                 }.get(r["status"], "—")
 
-                # teams[key]["tasks"].append(
-                #     f"  • Задание {r['seq_num']}: {r.get('task_name') or '—'} — {status_view}"
-                # )
-                
-                # рассчитываем время выполнения для success/timeout
                 task_time_str = ""
-                if r["status"] in ("success", "timeout") and r["task_start"] and r["task_finish"]:
+                sec = None
+                if r["status"] == "success" and r["task_start"] and r["task_finish"]:
                     try:
                         sec = int((r["task_finish"] - r["task_start"]).total_seconds())
                         task_time_str = f" ({sec // 60} мин {sec % 60} сек)"
-             #          task_time_str = f" ({sec // 60} мин)"
                     except Exception:
                         task_time_str = ""
+                elif r["status"] == "timeout":
+                    sec = (TASK_TIME_LIMIT + SHTRAF_TIME) * 60
+                    task_time_str = f" ({TASK_TIME_LIMIT} мин 0 сек + {SHTRAF_TIME} мин штрафное время)"
 
-                # компактный вывод: номер + название, без слова "Задание"
                 teams[key]["tasks"].append(
                     f"  • {r['seq_num']}: {r.get('task_name') or '—'} — {status_view}{task_time_str}"
                 )
 
-
-                # Чистое время только по success
-                #if r["status"] == "success" and r["task_start"] and r["task_finish"]:
-                if r["status"] in ("success", "timeout") and r["task_start"] and r["task_finish"]:
-                    sec = int((r["task_finish"] - r["task_start"]).total_seconds())
+                if sec is not None:
                     teams[key]["pure_seconds"] += max(sec, 0)
                     teams[key]["success_count"] += 1
-                    if (teams[key]["last_success_finish"] is None) or (r["task_finish"] > teams[key]["last_success_finish"]):
-                        teams[key]["last_success_finish"] = r["task_finish"]
+                    if r["status"] == "success" and r["task_finish"]:
+                        if (teams[key]["last_success_finish"] is None) or (r["task_finish"] > teams[key]["last_success_finish"]):
+                            teams[key]["last_success_finish"] = r["task_finish"]
 
-        # Итоги по командам
         results = []
         for (team, username), data in teams.items():
             finished_all = (tasks_total > 0 and data["success_count"] >= tasks_total)
 
-            # Стоп-время для общего времени
             stop_time = None
             if finished_all and data["last_success_finish"]:
                 stop_time = data["last_success_finish"]
@@ -188,9 +160,6 @@ async def show_stats(message: Message):
                 "tasks": data["tasks"]
             })
 
-        # --- отправка: разбиваем на блоки, чтобы не упереться в лимит Telegram ---
-
-        # Шапка
         header = [
             "📊 <b>Статистика по игре</b>",
             f"Статус игры: <b>{status_map.get(game['status'], game['status'])}</b>",
@@ -198,7 +167,6 @@ async def show_stats(message: Message):
         ]
         await _send_chunked(message, "\n".join(header), parse_mode="HTML")
 
-        # Каждая команда отдельным сообщением
         for r in results:
             block = []
             block.append(f"👥 <b>Команда:</b> {r['team']} (<i>@{r['username']}</i>)")
@@ -207,7 +175,6 @@ async def show_stats(message: Message):
             block.extend(r["tasks"] or ["  • Заданий пока нет"])
             await _send_chunked(message, "\n".join(block), parse_mode="HTML")
 
-        # Рейтинг после завершения игры
         if game["status"] == "finished":
             sortable = [r for r in results if r["elapsed_seconds"] is not None]
             sortable.sort(key=lambda x: x["elapsed_seconds"])
