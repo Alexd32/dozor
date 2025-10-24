@@ -80,7 +80,7 @@ async def get_task(message: Message):
                 await message.answer(
                     f"⏳ Новое задание будет доступно через {TASK_TIME_LIMIT - elapsed_minutes} мин.\n"
                     f"📜 Текущее задание №{active['seq_num']}:\n"
-                    f"🏷 {active['name']}\n"
+         #           f"🏷 {active['name']}\n"
                     f"📖 {active['text']}",
                     parse_mode="Markdown",
                     reply_markup=player_kb
@@ -144,7 +144,7 @@ async def get_task(message: Message):
 
         await message.answer(
             f"📜 Задание №{row['seq_num']} для команды *{player['team']}*:\n\n"
-            f"🏷 {row['name']}\n"
+      #      f"🏷 {row['name']}\n"
             f"📖 {row['text']}",
             parse_mode="Markdown",
             reply_markup=player_kb
